@@ -1,0 +1,14 @@
+Makefile.in
+aclocal.m4
+autom4te.cache/
+build-aux/
+build/
+configure
+debian/files
+debian/*.log
+debian/*.substvars
+debian/tmp/
+debian/libdrm-dove-dev/
+debian/libdrm-dove1-dbg/
+debian/libdrm-dove1/
+m4/

@@ -1,0 +1,60 @@
+Source: libdrm-dove
+Priority: optional
+Maintainer: Russell King <rmk+cubox@arm.linux.org.uk>
+Build-Depends:
+ debhelper (>= 8.1.2ubuntu2),
+ dh-autoreconf,
+ pkg-config,
+ libdrm-dev,
+Standards-Version: 3.9.2
+Section: libs
+
+Package: libdrm-dove-dev
+Section: libdevel
+Architecture: any
+Depends:
+ libdrm-dove1 (= ${binary:Version}),
+ ${misc:Depends},
+Description: Userspace interface to kernel DRM services -- development files
+ This library implements the userspace interface to the kernel DRM
+ services.  DRM stands for "Direct Rendering Manager", which is the
+ kernelspace portion of the "Direct Rendering Infrastructure" (DRI).
+ The DRI is currently used on Linux to provide hardware-accelerated
+ OpenGL drivers.
+ .
+ This package provides the development environment for libdrm-dove1.
+
+Package: libdrm-dove1
+Section: libs
+Priority: extra
+Architecture: linux-any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
+Description: Userspace interface to kernel DRM services -- runtime
+ This library implements the userspace interface to the kernel DRM
+ services.  DRM stands for "Direct Rendering Manager", which is the
+ kernelspace portion of the "Direct Rendering Infrastructure" (DRI).
+ The DRI is currently used on Linux to provide hardware-accelerated
+ OpenGL drivers.
+ .
+ This package provides the runtime environment for libdrm-dove1.
+
+Package: libdrm-dove1-dbg
+Section: debug
+Priority: extra
+Architecture: linux-any
+Depends:
+ libdrm2 (= ${binary:Version}),
+ ${misc:Depends},
+Multi-Arch: same
+Description: Userspace interface to kernel DRM services -- debugging symbols
+ This library implements the userspace interface to the kernel DRM
+ services.  DRM stands for "Direct Rendering Manager", which is the
+ kernelspace portion of the "Direct Rendering Infrastructure" (DRI).
+ The DRI is currently used on Linux to provide hardware-accelerated
+ OpenGL drivers.
+ .
+ This package provides debugging symbols for the libdrm-dove1 package.

@@ -1,0 +1,23 @@
+#!/usr/bin/make -f
+
+###
+### Actual build
+###
+
+override_dh_auto_configure:
+	dh_auto_configure -- --enable-static=yes
+
+override_dh_auto_install:
+	dh_auto_install --destdir=debian/tmp
+
+override_dh_install:
+	find debian/tmp -name '*.la' -delete
+	dh_install --fail-missing
+
+override_dh_strip:
+	dh_strip -plibdrm-dove1 --dbg-package=libdrm-dove1-dbg
+	dh_strip -s --remaining-packages
+
+%:
+	dh $@ --with quilt,autoreconf --builddirectory=build/
+

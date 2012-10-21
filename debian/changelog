@@ -1,0 +1,5 @@
+libdrm-dove (1.0.0-1) unstable; urgency=low
+
+  * Initial release.
+
+ -- Russell King <rmk_cubox@arm.linux.org.uk>  Tue, 9 Oct 2012 00:36:54 +0100
