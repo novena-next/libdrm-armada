@@ -1,5 +1,5 @@
 AC_PREREQ([2.63])
-AC_INIT([libdrm_dove], [1.0.0], [], [libdrm_dove])
+AC_INIT([libdrm_dove], [2.0.0], [], [libdrm_dove])
 
 AC_CONFIG_SRCDIR([Makefile.am])
 AC_CONFIG_MACRO_DIR([m4])
@@ -19,6 +19,11 @@ AC_USE_SYSTEM_EXTENSIONS
 # Initialize libtool
 LT_PREREQ([2.2])
 LT_INIT([disable-static])
+
+AC_CHECK_FUNCS([clock_gettime], [CLOCK_LIB=],
+               [AC_CHECK_LIB([rt], [clock_gettime], [CLOCK_LIB=-lrt],
+                             [AC_MSG_ERROR([Could not find clock_gettime])])])
+AC_SUBST([CLOCK_LIB])
 
 PKG_CHECK_MODULES(LIBDRM, libdrm)
 AC_SUBST(LIBDRM_CFLAGS)

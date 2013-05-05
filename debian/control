@@ -13,7 +13,7 @@ Package: libdrm-dove-dev
 Section: libdevel
 Architecture: any
 Depends:
- libdrm-dove1 (= ${binary:Version}),
+ libdrm-dove2 (= ${binary:Version}),
  ${misc:Depends},
 Description: Userspace interface to kernel DRM services -- development files
  This library implements the userspace interface to the kernel DRM
@@ -22,9 +22,9 @@ Description: Userspace interface to kernel DRM services -- development files
  The DRI is currently used on Linux to provide hardware-accelerated
  OpenGL drivers.
  .
- This package provides the development environment for libdrm-dove1.
+ This package provides the development environment for libdrm-dove2.
 
-Package: libdrm-dove1
+Package: libdrm-dove2
 Section: libs
 Priority: extra
 Architecture: linux-any
@@ -40,14 +40,13 @@ Description: Userspace interface to kernel DRM services -- runtime
  The DRI is currently used on Linux to provide hardware-accelerated
  OpenGL drivers.
  .
- This package provides the runtime environment for libdrm-dove1.
+ This package provides the runtime environment for libdrm-dove2.
 
-Package: libdrm-dove1-dbg
+Package: libdrm-dove2-dbg
 Section: debug
 Priority: extra
 Architecture: linux-any
 Depends:
- libdrm2 (= ${binary:Version}),
  ${misc:Depends},
 Multi-Arch: same
 Description: Userspace interface to kernel DRM services -- debugging symbols
@@ -57,4 +56,4 @@ Description: Userspace interface to kernel DRM services -- debugging symbols
  The DRI is currently used on Linux to provide hardware-accelerated
  OpenGL drivers.
  .
- This package provides debugging symbols for the libdrm-dove1 package.
+ This package provides debugging symbols for the libdrm-dove2 package.

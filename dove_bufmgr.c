@@ -4,9 +4,11 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/mman.h>
+#include <time.h>
 
 #include <drm.h>
 
+#include "libdrm_lists.h"
 #include "dove_bufmgr.h"
 #include "dove_ioctl.h"
 
@@ -16,10 +18,58 @@
     (type *)( (char *)__mptr - offsetof(type,member) );})
 #endif
 
+/* The interval in seconds between cache cleans */
+#define BO_CACHE_CLEAN_INTERVAL	1
+/* The maximum age in seconds of a BO in the cache */
+#define BO_CACHE_MAX_AGE	2
+/* Number of buckets in the BO cache */
+#define NUM_BUCKETS		(3*9)
+
+/*
+ * These sizes come from the i915 DRM backend - which uses roughly
+ * for n = 2..
+ *   (4096 << n) + (4096 << n) * 1 / 4
+ *   (4096 << n) + (4096 << n) * 2 / 4
+ *   (4096 << n) + (4096 << n) * 3 / 4
+ * The reasoning being that powers of two are too wasteful in X.
+ */
+static size_t bucket_size[NUM_BUCKETS] = {
+	   4096,	   8192,	  12288,
+	  20480,	  24576,	  28672,
+	  40960,	  49152,	  57344,
+	  81920,	  98304,	 114688,
+	 163840,	 196608,	 229376,
+	 327680,	 393216,	 458752,
+	 655360,	 786432,	 917504,
+	1310720,	1572864,	1835008,
+	2621440,	3145728,	3670016,
+};
+
+struct dove_bucket {
+	drmMMListHead head;	/* LRU list of bos in this size */
+	size_t size;
+};
+
+struct dove_bo_cache {
+	struct dove_bucket buckets[NUM_BUCKETS];
+	drmMMListHead head;	/* LRU list of all freed bos */
+	time_t last_cleaned;
+};
+
+struct drm_dove_bufmgr {
+	struct dove_bo_cache cache;
+	int fd;
+};
+
 struct dove_bo {
 	struct drm_dove_bo bo;
-	uint32_t ref;
-	uint32_t name;          /* Global name */
+	struct drm_dove_bufmgr *mgr; /* manager associated with this bo */
+	drmMMListHead bucket;        /* Cache bucket list */
+	drmMMListHead free;          /* Free list */
+	time_t free_time;            /* Time this bo was freed */
+	size_t alloc_size;           /* Allocated size */
+	uint32_t ref;                /* Reference count */
+	uint32_t name;               /* Global name */
 };
 
 #define to_dove_bo(_bo) container_of(_bo, struct dove_bo, bo)
@@ -55,9 +105,164 @@ struct drm_mode_map_dumb {
 #define DRM_IOCTL_MODE_MAP_DUMB    DRM_IOWR(0xB3, struct drm_mode_map_dumb)
 #endif
 
-struct drm_dove_bo *drm_dove_bo_create_phys(int fd, uint32_t phys, size_t size)
+/* Given a width and bpp, return the pitch of a bo */
+static unsigned dove_bo_pitch(unsigned width, unsigned bpp)
+{
+    unsigned pitch = bpp != 4 ? width * ((bpp + 7) / 8) : width / 2;
+
+    /* 88AP510 spec recommends pitch be a multiple of 128 */
+    return (pitch + 127) & ~127;
+}
+
+/* Given the pitch and height, return the allocated size in bytes of a bo */
+static size_t dove_bo_size(unsigned pitch, unsigned height)
+{
+    return pitch * height;
+}
+
+static size_t dove_bo_round_size(size_t size)
+{
+    if (size > 1048576)
+        size = (size + 1048575) & ~1048575;
+    else if (size > 65536)
+        size = (size + 65535) & ~65535;
+    else
+        size = (size + 4095) & ~4095;
+    return size;
+}
+
+static void dove_bo_free(struct dove_bo *bo)
+{
+    int ret, fd = bo->mgr->fd;
+
+    if (bo->bo.ptr) {
+        munmap(bo->bo.ptr, bo->alloc_size);
+        bo->bo.ptr = NULL;
+    }
+
+    if (bo->bo.type == DRM_DOVE_BO_DUMB) {
+        struct drm_mode_destroy_dumb arg;
+
+        memset(&arg, 0, sizeof(arg));
+        arg.handle = bo->bo.handle;
+        ret = drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &arg);
+    } else {
+        struct drm_gem_close close;
+
+        memset(&close, 0, sizeof(close));
+        close.handle = bo->bo.handle;
+        ret = ioctl(fd, DRM_IOCTL_GEM_CLOSE, &close);
+    }
+
+    if (ret == 0)
+        free(bo);
+}
+
+static void dove_bo_cache_init(struct dove_bo_cache *cache)
+{
+    struct timespec time;
+    unsigned i;
+
+    clock_gettime(CLOCK_MONOTONIC, &time);
+
+    cache->last_cleaned = time.tv_sec;
+    DRMINITLISTHEAD(&cache->head);
+
+    for (i = 0; i < NUM_BUCKETS; i++) {
+        DRMINITLISTHEAD(&cache->buckets[i].head);
+        cache->buckets[i].size = bucket_size[i];
+    }
+}
+
+static void dove_bo_cache_fini(struct dove_bo_cache *cache)
+{
+    while (!DRMLISTEMPTY(&cache->head)) {
+        struct dove_bo *bo;
+
+        bo = DRMLISTENTRY(struct dove_bo, cache->head.next, free);
+
+        DRMLISTDEL(&bo->bucket);
+        DRMLISTDEL(&bo->free);
+
+        dove_bo_free(bo);
+    }
+}
+
+static struct dove_bucket *dove_find_bucket(struct dove_bo_cache *cache, size_t size)
+{
+    unsigned i;
+
+    for (i = 0; i < NUM_BUCKETS; i++) {
+        struct dove_bucket *bucket = &cache->buckets[i];
+
+        if (bucket->size >= size)
+            return bucket;
+    }
+
+    return NULL;
+}
+
+static void dove_bo_cache_clean(struct dove_bo_cache *cache, time_t time)
+{
+    if (time - cache->last_cleaned < BO_CACHE_CLEAN_INTERVAL)
+        return;
+
+    cache->last_cleaned = time;
+
+    while (!DRMLISTEMPTY(&cache->head)) {
+        struct dove_bo *bo;
+
+        bo = DRMLISTENTRY(struct dove_bo, cache->head.next, free);
+        if (time - bo->free_time < BO_CACHE_MAX_AGE)
+            break;
+
+        DRMLISTDEL(&bo->bucket);
+        DRMLISTDEL(&bo->free);
+
+        dove_bo_free(bo);
+    }
+}
+
+static struct dove_bo *dove_bo_bucket_get(struct dove_bucket *bucket, size_t size)
+{
+    struct dove_bo *bo = NULL;
+
+    if (!DRMLISTEMPTY(&bucket->head)) {
+        drmMMListHead *entry = bucket->head.next;
+
+        bo = DRMLISTENTRY(struct dove_bo, entry, bucket);
+        DRMLISTDEL(&bo->bucket);
+        DRMLISTDEL(&bo->free);
+    }
+    return bo;
+}
+
+static void dove_bo_cache_put(struct dove_bo *bo)
+{
+    struct dove_bo_cache *cache = &bo->mgr->cache;
+    struct dove_bucket *bucket = dove_find_bucket(cache, bo->alloc_size);
+
+    if (bucket) {
+        struct timespec time;
+
+        clock_gettime(CLOCK_MONOTONIC, &time);
+
+        bo->free_time = time.tv_sec;
+        DRMLISTADDTAIL(&bo->bucket, &bucket->head);
+        DRMLISTADDTAIL(&bo->free, &cache->head);
+
+        dove_bo_cache_clean(cache, time.tv_sec);
+
+        return;
+    }
+    dove_bo_free(bo);
+}
+
+struct drm_dove_bo *drm_dove_bo_create_phys(struct drm_dove_bufmgr *mgr,
+    uint32_t phys, size_t size)
 {
     struct dove_bo *bo;
+    int fd = mgr->fd;
 
     bo = calloc(1, sizeof *bo);
     if (bo) {
@@ -78,44 +283,80 @@ struct drm_dove_bo *drm_dove_bo_create_phys(int fd, uint32_t phys, size_t size)
         bo->bo.size = size;
         bo->bo.phys = phys;
         bo->bo.type = DRM_DOVE_BO_LINEAR;
+        bo->alloc_size = size;
         bo->ref = 1;
+        bo->mgr = mgr;
     }
     return &bo->bo;
 }
 
-struct drm_dove_bo *drm_dove_bo_create(int fd, unsigned w, unsigned h, unsigned bpp)
+struct drm_dove_bo *drm_dove_bo_create(struct drm_dove_bufmgr *mgr,
+    unsigned w, unsigned h, unsigned bpp)
 {
+    struct drm_dove_gem_create arg;
+    struct dove_bucket *bucket;
     struct dove_bo *bo;
+    unsigned pitch;
+    size_t alloc_size;
+    int fd = mgr->fd;
+    int ret;
 
-    bo = calloc(1, sizeof *bo);
-    if (bo) {
-        struct drm_dove_gem_create arg;
-        int ret;
+    pitch = dove_bo_pitch(w, bpp);
+    alloc_size = dove_bo_size(pitch, h);
 
-        memset(&arg, 0, sizeof(arg));
-        arg.width = w;
-        arg.height = h;
-        arg.bpp = bpp;
-
-        ret = drmIoctl(fd, DRM_IOCTL_DOVE_GEM_CREATE, &arg);
-        if (ret) {
-            free(bo);
-            return NULL;
+    /* Try to find a bucket for this allocation */
+    bucket = dove_find_bucket(&mgr->cache, alloc_size);
+    if (bucket) {
+        /* Can we allocate from our cache? */
+        bo = dove_bo_bucket_get(bucket, alloc_size);
+        if (bo) {
+            bo->bo.size = pitch * h;
+            bo->bo.pitch = pitch;
+            bo->ref = 1;
+            return &bo->bo;
         }
 
-        bo->bo.ref = 1;
-        bo->bo.handle = arg.handle;
-        bo->bo.size = arg.size;
-        bo->bo.pitch = arg.pitch;
-        bo->bo.type = DRM_DOVE_BO_SHMEM;
-        bo->ref = 1;
+        /* Otherwise, allocate a bo of the bucket size */
+        alloc_size = bucket->size;
+    } else {
+        /* No bucket, so round the size up according to our old rules */
+        alloc_size = dove_bo_round_size(alloc_size);
     }
+
+    /* No, create a new bo */
+    bo = calloc(1, sizeof *bo);
+    if (!bo)
+        return NULL;
+
+    memset(&arg, 0, sizeof(arg));
+    arg.width = w;
+    arg.height = h;
+    arg.bpp = bpp;
+    arg.size = alloc_size;
+
+    ret = drmIoctl(fd, DRM_IOCTL_DOVE_GEM_CREATE, &arg);
+    if (ret) {
+        free(bo);
+        return NULL;
+    }
+
+    bo->bo.ref = 1;
+    bo->bo.handle = arg.handle;
+    bo->bo.size = pitch * h;
+    bo->bo.pitch = pitch;
+    bo->bo.type = DRM_DOVE_BO_SHMEM;
+    bo->alloc_size = alloc_size;
+    bo->ref = 1;
+    bo->mgr = mgr;
+
     return &bo->bo;
 }
 
-struct drm_dove_bo *drm_dove_bo_create_from_name(int fd, uint32_t name)
+struct drm_dove_bo *drm_dove_bo_create_from_name(struct drm_dove_bufmgr *mgr,
+    uint32_t name)
 {
     struct dove_bo *bo;
+    int fd = mgr->fd;
 
     bo = calloc(1, sizeof *bo);
     if (bo) {
@@ -133,16 +374,19 @@ struct drm_dove_bo *drm_dove_bo_create_from_name(int fd, uint32_t name)
         bo->bo.handle = arg.handle;
         bo->bo.size = arg.size;
         bo->bo.type = DRM_DOVE_BO_LINEAR; /* assumed */
+        bo->alloc_size = arg.size;
         bo->ref = 1;
         bo->name = name;
+        bo->mgr = mgr;
     }
     return &bo->bo;
 }
 
-struct drm_dove_bo *drm_dove_bo_dumb_create(int fd, unsigned w, unsigned h,
-    unsigned bpp)
+struct drm_dove_bo *drm_dove_bo_dumb_create(struct drm_dove_bufmgr *mgr,
+    unsigned w, unsigned h, unsigned bpp)
 {
     struct dove_bo *bo;
+    int fd = mgr->fd;
 
     bo = calloc(1, sizeof *bo);
     if (bo) {
@@ -164,51 +408,37 @@ struct drm_dove_bo *drm_dove_bo_dumb_create(int fd, unsigned w, unsigned h,
         bo->bo.size = arg.size;
         bo->bo.pitch = arg.pitch;
         bo->bo.type = DRM_DOVE_BO_DUMB;
+        bo->alloc_size = arg.size;
         bo->ref = 1;
+        bo->mgr = mgr;
     }
     return &bo->bo;
 }
 
-void drm_dove_bo_get(int fd, struct drm_dove_bo *dbo)
+void drm_dove_bo_get(struct drm_dove_bo *dbo)
 {
     struct dove_bo *bo = to_dove_bo(dbo);
     bo->ref++;
 }
 
-void drm_dove_bo_put(int fd, struct drm_dove_bo *dbo)
+void drm_dove_bo_put(struct drm_dove_bo *dbo)
 {
     struct dove_bo *bo = to_dove_bo(dbo);
 
     if (bo->ref-- == 1) {
         int ret;
 
-        if (bo->bo.ptr) {
-            munmap(bo->bo.ptr, bo->bo.size);
-            bo->bo.ptr = NULL;
-        }
-
-        if (bo->bo.type == DRM_DOVE_BO_DUMB) {
-            struct drm_mode_destroy_dumb arg;
-
-            memset(&arg, 0, sizeof(arg));
-            arg.handle = bo->bo.handle;
-            ret = drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &arg);
-        } else {
-            struct drm_gem_close close;
-
-            memset(&close, 0, sizeof(close));
-            close.handle = bo->bo.handle;
-            ret = ioctl(fd, DRM_IOCTL_GEM_CLOSE, &close);
-        }
-
-        if (ret == 0)
-            free(bo);
+        if (bo->bo.type == DRM_DOVE_BO_SHMEM)
+            dove_bo_cache_put(bo);
+        else
+            dove_bo_free(bo);
     }
 }
 
-int drm_dove_bo_flink(int fd, struct drm_dove_bo *dbo, uint32_t *name)
+int drm_dove_bo_flink(struct drm_dove_bo *dbo, uint32_t *name)
 {
     struct dove_bo *bo = to_dove_bo(dbo);
+    int fd = bo->mgr->fd;
 
     if (!bo->name) {
         struct drm_gem_flink flink;
@@ -225,11 +455,11 @@ int drm_dove_bo_flink(int fd, struct drm_dove_bo *dbo, uint32_t *name)
     return 0;
 }
 
-int drm_dove_bo_map(int fd, struct drm_dove_bo *dbo)
+int drm_dove_bo_map(struct drm_dove_bo *dbo)
 {
     struct dove_bo *bo = to_dove_bo(dbo);
     void *map;
-    int ret;
+    int ret, fd = bo->mgr->fd;
 
     if (bo->bo.ptr)
         return 0;
@@ -244,7 +474,7 @@ int drm_dove_bo_map(int fd, struct drm_dove_bo *dbo)
         if (ret)
             return ret;
 
-        map = mmap(0, bo->bo.size, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
+        map = mmap(0, bo->alloc_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
                    arg.offset);
 
         if (map == MAP_FAILED)
@@ -255,7 +485,7 @@ int drm_dove_bo_map(int fd, struct drm_dove_bo *dbo)
         memset(&arg, 0, sizeof(arg));
         arg.handle = bo->bo.handle;
         arg.offset = 0;
-        arg.size = bo->bo.size;
+        arg.size = bo->alloc_size;
 
         ret = drmIoctl(fd, DRM_IOCTL_DOVE_GEM_MMAP, &arg);
         if (ret)
@@ -272,11 +502,11 @@ int drm_dove_bo_map(int fd, struct drm_dove_bo *dbo)
     return 0;
 }
 
-uint32_t drm_dove_bo_phys(int fd, struct drm_dove_bo *dbo)
+uint32_t drm_dove_bo_phys(struct drm_dove_bo *dbo)
 {
     struct dove_bo *bo = to_dove_bo(dbo);
     struct drm_dove_gem_prop arg;
-    int ret;
+    int ret, fd = bo->mgr->fd;
 
     memset(&arg, 0, sizeof(arg));
     arg.handle = bo->bo.handle;
@@ -286,13 +516,15 @@ uint32_t drm_dove_bo_phys(int fd, struct drm_dove_bo *dbo)
     return ret ? -1 : (uint32_t)arg.phys;
 }
 
-int drm_dove_bo_subdata(int fd, struct drm_dove_bo *bo, unsigned long offset,
+int drm_dove_bo_subdata(struct drm_dove_bo *dbo, unsigned long offset,
     unsigned long size, const void *data)
 {
+    struct dove_bo *bo = to_dove_bo(dbo);
     struct drm_dove_gem_pwrite arg;
+    int fd = bo->mgr->fd;
 
     memset(&arg, 0, sizeof(arg));
-    arg.handle = bo->handle;
+    arg.handle = bo->bo.handle;
     arg.offset = offset;
     arg.size = size;
     arg.ptr = (uint64_t)(uintptr_t)data;
@@ -300,3 +532,23 @@ int drm_dove_bo_subdata(int fd, struct drm_dove_bo *bo, unsigned long offset,
     return drmIoctl(fd, DRM_IOCTL_DOVE_GEM_PWRITE, &arg);
 }
 
+int drm_dove_init(int fd, struct drm_dove_bufmgr **mgrp)
+{
+    struct drm_dove_bufmgr *mgr;
+
+    mgr = calloc(1, sizeof(*mgr));
+    if (!mgr)
+        return -1;
+
+    dove_bo_cache_init(&mgr->cache);
+    mgr->fd = fd;
+    *mgrp = mgr;
+
+    return 0;
+}
+
+void drm_dove_fini(struct drm_dove_bufmgr *mgr)
+{
+    dove_bo_cache_fini(&mgr->cache);
+    free(mgr);
+}

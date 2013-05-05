@@ -15,7 +15,7 @@ override_dh_install:
 	dh_install --fail-missing
 
 override_dh_strip:
-	dh_strip -plibdrm-dove1 --dbg-package=libdrm-dove1-dbg
+	dh_strip -plibdrm-dove2 --dbg-package=libdrm-dove2-dbg
 	dh_strip -s --remaining-packages
 
 %:

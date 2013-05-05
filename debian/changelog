@@ -1,3 +1,11 @@
+libdrm-dove (2.0.0-1) unstable; urgency=low
+
+  * Re-vamp API to allow a buffer manager object, stop passing fd into
+    every function.
+  * Add caching support
+
+ -- Russell King <rmk_cubox@arm.linux.org.uk>  Sun, 5 May 2013 13:47:28 +0100
+
 libdrm-dove (1.0.1-1) unstable; urgency=low
 
   * Add drm_dove_bo_create_from_name()
