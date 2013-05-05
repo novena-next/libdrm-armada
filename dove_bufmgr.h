@@ -21,6 +21,13 @@ struct drm_dove_bo *drm_dove_bo_create(int fd, unsigned w, unsigned h, unsigned 
 struct drm_dove_bo *drm_dove_bo_create_phys(int fd, uint32_t phys, size_t size);
 struct drm_dove_bo *drm_dove_bo_dumb_create(int fd, unsigned w, unsigned h,
     unsigned bpp);
+
+/* Create a BO from a global name */
+struct drm_dove_bo *drm_dove_bo_create_from_name(int fd, uint32_t name);
+
+/* Create a global name from a BO */
+int drm_dove_bo_flink(int fd, struct drm_dove_bo *bo, uint32_t *name);
+
 int drm_dove_bo_map(int fd, struct drm_dove_bo *bo);
 uint32_t drm_dove_bo_phys(int fd, struct drm_dove_bo *bo);
 void drm_dove_bo_get(int fd, struct drm_dove_bo *bo);

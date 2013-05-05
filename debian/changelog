@@ -1,3 +1,10 @@
+libdrm-dove (1.0.1-1) unstable; urgency=low
+
+  * Add drm_dove_bo_create_from_name()
+  * Add drm_dove_bo_flink()
+
+ -- Russell King <rmk_cubox@arm.linux.org.uk>  Tue, 23 Oct 2012 17:28:17 +0100
+
 libdrm-dove (1.0.0-1) unstable; urgency=low
 
   * Initial release.
