@@ -3,9 +3,9 @@ exec_prefix=@exec_prefix@
 libdir=@libdir@
 includedir=@includedir@
 
-Name: libdrm_dove
-Description: Userspace interface to kerenl DRM services
+Name: libdrm_armada
+Description: Userspace interface to kernel DRM services
 Version: @PACKAGE_VERSION@
 Requires: libdrm
-Libs: -L${libdir} -ldrm_dove
+Libs: -L${libdir} -ldrm_armada
 Cflags: -I${includedir}/libdrm

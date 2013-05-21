@@ -1,3 +1,10 @@
+libdrm-armada (2.0.1-1) unstable; urgency=low
+
+  * Rename to Armada as this covers more devices than just the Armada 510
+    Dove.
+
+ -- Russell King <rmk_cubox@arm.linux.org.uk>  Tue, 21 May 2013 10:54:58 +0100
+
 libdrm-dove (2.0.0-1) unstable; urgency=low
 
   * Re-vamp API to allow a buffer manager object, stop passing fd into

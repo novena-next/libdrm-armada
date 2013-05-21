@@ -1,4 +1,4 @@
-Source: libdrm-dove
+Source: libdrm-armada
 Priority: optional
 Maintainer: Russell King <rmk+cubox@arm.linux.org.uk>
 Build-Depends:
@@ -9,11 +9,11 @@ Build-Depends:
 Standards-Version: 3.9.2
 Section: libs
 
-Package: libdrm-dove-dev
+Package: libdrm-armada-dev
 Section: libdevel
 Architecture: any
 Depends:
- libdrm-dove2 (= ${binary:Version}),
+ libdrm-armada2 (= ${binary:Version}),
  ${misc:Depends},
 Description: Userspace interface to kernel DRM services -- development files
  This library implements the userspace interface to the kernel DRM
@@ -22,9 +22,9 @@ Description: Userspace interface to kernel DRM services -- development files
  The DRI is currently used on Linux to provide hardware-accelerated
  OpenGL drivers.
  .
- This package provides the development environment for libdrm-dove2.
+ This package provides the development environment for libdrm-armada2.
 
-Package: libdrm-dove2
+Package: libdrm-armada2
 Section: libs
 Priority: extra
 Architecture: linux-any
@@ -40,9 +40,9 @@ Description: Userspace interface to kernel DRM services -- runtime
  The DRI is currently used on Linux to provide hardware-accelerated
  OpenGL drivers.
  .
- This package provides the runtime environment for libdrm-dove2.
+ This package provides the runtime environment for libdrm-armada2.
 
-Package: libdrm-dove2-dbg
+Package: libdrm-armada2-dbg
 Section: debug
 Priority: extra
 Architecture: linux-any
@@ -56,4 +56,4 @@ Description: Userspace interface to kernel DRM services -- debugging symbols
  The DRI is currently used on Linux to provide hardware-accelerated
  OpenGL drivers.
  .
- This package provides debugging symbols for the libdrm-dove2 package.
+ This package provides debugging symbols for the libdrm-armada2 package.

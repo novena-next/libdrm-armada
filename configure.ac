@@ -1,5 +1,5 @@
 AC_PREREQ([2.63])
-AC_INIT([libdrm_dove], [2.0.0], [], [libdrm_dove])
+AC_INIT([libdrm_armada], [2.0.0], [], [libdrm_armada])
 
 AC_CONFIG_SRCDIR([Makefile.am])
 AC_CONFIG_MACRO_DIR([m4])
@@ -34,6 +34,6 @@ AC_SUBST(pkgconfigdir)
 
 AC_CONFIG_FILES([
 	Makefile
-	libdrm_dove.pc
+	libdrm_armada.pc
 ])
 AC_OUTPUT

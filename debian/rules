@@ -15,9 +15,9 @@ override_dh_install:
 	dh_install --fail-missing
 
 override_dh_strip:
-	dh_strip -plibdrm-dove2 --dbg-package=libdrm-dove2-dbg
+	dh_strip -plibdrm-armada2 --dbg-package=libdrm-armada2-dbg
 	dh_strip -s --remaining-packages
 
 %:
-	dh $@ --with quilt,autoreconf --builddirectory=build/
+	dh $@ --with autoreconf --builddirectory=build/
 
