@@ -329,9 +329,6 @@ struct drm_armada_bo *drm_armada_bo_create(struct drm_armada_bufmgr *mgr,
         return NULL;
 
     memset(&arg, 0, sizeof(arg));
-    arg.width = w;
-    arg.height = h;
-    arg.bpp = bpp;
     arg.size = alloc_size;
 
     ret = drmIoctl(fd, DRM_IOCTL_ARMADA_GEM_CREATE, &arg);
@@ -524,10 +521,10 @@ int drm_armada_bo_subdata(struct drm_armada_bo *dbo, unsigned long offset,
     int fd = bo->mgr->fd;
 
     memset(&arg, 0, sizeof(arg));
+    arg.ptr = (uint64_t)(uintptr_t)data;
     arg.handle = bo->bo.handle;
     arg.offset = offset;
     arg.size = size;
-    arg.ptr = (uint64_t)(uintptr_t)data;
 
     return drmIoctl(fd, DRM_IOCTL_ARMADA_GEM_PWRITE, &arg);
 }
