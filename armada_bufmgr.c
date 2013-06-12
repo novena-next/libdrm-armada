@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/fcntl.h>
 #include <sys/mman.h>
 #include <time.h>
 
@@ -449,6 +450,17 @@ int drm_armada_bo_flink(struct drm_armada_bo *dbo, uint32_t *name)
         bo->name = flink.name;
     }
     *name = bo->name;
+    return 0;
+}
+
+int drm_armada_bo_to_fd(struct drm_armada_bo *dbo, int *prime_fd)
+{
+    struct armada_bo *bo = to_armada_bo(dbo);
+    int fd = bo->mgr->fd;
+
+    if (drmPrimeHandleToFD(fd, bo->bo.handle, DRM_CLOEXEC, prime_fd))
+        return -1;
+
     return 0;
 }
 

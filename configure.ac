@@ -25,7 +25,7 @@ AC_CHECK_FUNCS([clock_gettime], [CLOCK_LIB=],
                              [AC_MSG_ERROR([Could not find clock_gettime])])])
 AC_SUBST([CLOCK_LIB])
 
-PKG_CHECK_MODULES(LIBDRM, libdrm)
+PKG_CHECK_MODULES(LIBDRM, [libdrm >= 2.4.38])
 AC_SUBST(LIBDRM_CFLAGS)
 AC_SUBST(LIBDRM_LIBS)
 
