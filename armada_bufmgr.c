@@ -282,7 +282,6 @@ struct drm_armada_bo *drm_armada_bo_create_phys(struct drm_armada_bufmgr *mgr,
         bo->bo.ref = 1;
         bo->bo.handle = arg.handle;
         bo->bo.size = size;
-        bo->bo.phys = phys;
         bo->bo.type = DRM_ARMADA_BO_LINEAR;
         bo->alloc_size = size;
         bo->ref = 1;
@@ -509,20 +508,6 @@ int drm_armada_bo_map(struct drm_armada_bo *dbo)
     bo->bo.ptr = map;
 
     return 0;
-}
-
-uint32_t drm_armada_bo_phys(struct drm_armada_bo *dbo)
-{
-    struct armada_bo *bo = to_armada_bo(dbo);
-    struct drm_armada_gem_prop arg;
-    int ret, fd = bo->mgr->fd;
-
-    memset(&arg, 0, sizeof(arg));
-    arg.handle = bo->bo.handle;
-
-    ret = drmIoctl(fd, DRM_IOCTL_ARMADA_GEM_PROP, &arg);
-
-    return ret ? -1 : (uint32_t)arg.phys;
 }
 
 int drm_armada_bo_subdata(struct drm_armada_bo *dbo, unsigned long offset,

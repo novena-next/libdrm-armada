@@ -13,10 +13,9 @@
 #define DRM_ARMADA_GEM_CREATE_PHYS	0x01
 #define DRM_ARMADA_GEM_MMAP		0x02
 #define DRM_ARMADA_GEM_PWRITE		0x03
-#define DRM_ARMADA_GEM_PROP		0x04
 #define DRM_ARMADA_GEM_CACHE		0x05
 #define DRM_ARMADA_OVERLAY_PUT_IMAGE	0x06
-#define DRM_ARMADA_OVERLAY_ATTRS		0x07
+#define DRM_ARMADA_OVERLAY_ATTRS	0x07
 
 #define ARMADA_IOCTL(dir,name,str) \
 	DRM_##dir(DRM_COMMAND_BASE + DRM_ARMADA_##name, struct drm_armada_##str)
@@ -54,13 +53,6 @@ struct drm_armada_gem_pwrite {
 };
 #define DRM_IOCTL_ARMADA_GEM_PWRITE \
 	ARMADA_IOCTL(IOW, GEM_PWRITE, gem_pwrite)
-
-struct drm_armada_gem_prop {
-	uint64_t phys;
-	uint32_t handle;
-};
-#define DRM_IOCTL_ARMADA_GEM_PROP \
-	ARMADA_IOCTL(IOWR, GEM_PROP, gem_prop)
 
 struct drm_armada_gem_cache {
 	uint64_t ptr;

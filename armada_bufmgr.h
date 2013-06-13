@@ -14,7 +14,6 @@ struct drm_armada_bo {
 	uint32_t handle;
 	uint32_t size;
 	uint32_t pitch;
-	uint32_t phys;
 	void *ptr;
 	enum drm_armada_bo_type type;
 };
@@ -40,7 +39,6 @@ int drm_armada_bo_flink(struct drm_armada_bo *bo, uint32_t *name);
 int drm_armada_bo_to_fd(struct drm_armada_bo *bo, int *fd);
 
 int drm_armada_bo_map(struct drm_armada_bo *bo);
-uint32_t drm_armada_bo_phys(struct drm_armada_bo *bo);
 void drm_armada_bo_get(struct drm_armada_bo *bo);
 void drm_armada_bo_put(struct drm_armada_bo *bo);
 int drm_armada_bo_subdata(struct drm_armada_bo *bo, unsigned long offset,
