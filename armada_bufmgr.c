@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -7,7 +8,7 @@
 #include <sys/mman.h>
 #include <time.h>
 
-#include <drm.h>
+#include <xf86drm.h>
 
 #include "libdrm_lists.h"
 #include "armada_bufmgr.h"
@@ -59,6 +60,8 @@ struct armada_bo_cache {
 
 struct drm_armada_bufmgr {
 	struct armada_bo_cache cache;
+	void *handle_hash;	/* Hash of DRM handles */
+	void *name_hash;	/* Hash of DRM global names */
 	int fd;
 };
 
@@ -132,6 +135,15 @@ static size_t armada_bo_round_size(size_t size)
     return size;
 }
 
+static int armada_gem_handle_close(int fd, uint32_t handle)
+{
+    struct drm_gem_close close;
+
+    memset(&close, 0, sizeof(close));
+    close.handle = handle;
+    return ioctl(fd, DRM_IOCTL_GEM_CLOSE, &close);
+}
+
 static void armada_bo_free(struct armada_bo *bo)
 {
     int ret, fd = bo->mgr->fd;
@@ -141,6 +153,10 @@ static void armada_bo_free(struct armada_bo *bo)
         bo->bo.ptr = NULL;
     }
 
+    assert(drmHashDelete(bo->mgr->handle_hash, bo->bo.handle) == 0);
+    if (bo->name)
+        assert(drmHashDelete(bo->mgr->name_hash, bo->name) == 0);
+
     if (bo->bo.type == DRM_ARMADA_BO_DUMB) {
         struct drm_mode_destroy_dumb arg;
 
@@ -148,11 +164,7 @@ static void armada_bo_free(struct armada_bo *bo)
         arg.handle = bo->bo.handle;
         ret = drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &arg);
     } else {
-        struct drm_gem_close close;
-
-        memset(&close, 0, sizeof(close));
-        close.handle = bo->bo.handle;
-        ret = ioctl(fd, DRM_IOCTL_GEM_CLOSE, &close);
+        ret = armada_gem_handle_close(fd, bo->bo.handle);
     }
 
     if (ret == 0)
@@ -286,6 +298,9 @@ struct drm_armada_bo *drm_armada_bo_create_phys(struct drm_armada_bufmgr *mgr,
         bo->alloc_size = size;
         bo->ref = 1;
         bo->mgr = mgr;
+
+        /* Add it to the handle hash table */
+        assert(drmHashInsert(mgr->handle_hash, bo->bo.handle, bo) == 0);
     }
     return &bo->bo;
 }
@@ -346,36 +361,62 @@ struct drm_armada_bo *drm_armada_bo_create(struct drm_armada_bufmgr *mgr,
     bo->ref = 1;
     bo->mgr = mgr;
 
+    /* Add it to the handle hash table */
+    assert(drmHashInsert(mgr->handle_hash, bo->bo.handle, bo) == 0);
+
     return &bo->bo;
 }
 
 struct drm_armada_bo *drm_armada_bo_create_from_name(struct drm_armada_bufmgr *mgr,
     uint32_t name)
 {
+    struct drm_gem_open arg;
     struct armada_bo *bo;
-    int fd = mgr->fd;
+    int ret, fd = mgr->fd;
+
+    /*
+     * Lookup this handle in our hash of names.  If it
+     * already exists, increment the refcount and return it.
+     */
+    if (drmHashLookup(mgr->name_hash, name, (void **)&bo) == 0) {
+        drm_armada_bo_get(&bo->bo);
+        return &bo->bo;
+    }
+
+    memset(&arg, 0, sizeof(arg));
+    arg.name = name;
+    ret = drmIoctl(fd, DRM_IOCTL_GEM_OPEN, &arg);
+    if (ret == -1)
+        return NULL;
+
+    /*
+     * Lookup this handle in our hash of handles.  If it
+     * already exists, increment the refcount and return it.
+     */
+    if (drmHashLookup(mgr->handle_hash, arg.handle, (void **)&bo) == 0) {
+        drm_armada_bo_get(&bo->bo);
+        return &bo->bo;
+    }
 
     bo = calloc(1, sizeof *bo);
-    if (bo) {
-        struct drm_gem_open arg;
-        int ret;
-
-        memset(&arg, 0, sizeof(arg));
-        arg.name = name;
-        ret = drmIoctl(fd, DRM_IOCTL_GEM_OPEN, &arg);
-        if (ret == -1) {
-            free(bo);
-            return NULL;
-        }
-        bo->bo.ref = 1;
-        bo->bo.handle = arg.handle;
-        bo->bo.size = arg.size;
-        bo->bo.type = DRM_ARMADA_BO_LINEAR; /* assumed */
-        bo->alloc_size = arg.size;
-        bo->ref = 1;
-        bo->name = name;
-        bo->mgr = mgr;
+    if (!bo) {
+        armada_gem_handle_close(fd, arg.handle);
+        return NULL;
     }
+
+    bo->bo.ref = 1;
+    bo->bo.handle = arg.handle;
+    bo->bo.size = arg.size;
+    bo->bo.type = DRM_ARMADA_BO_LINEAR; /* assumed */
+    bo->alloc_size = arg.size;
+    bo->ref = 1;
+    bo->name = name;
+    bo->mgr = mgr;
+
+    /* Add it to the handle hash table */
+    assert(drmHashInsert(mgr->handle_hash, bo->bo.handle, bo) == 0);
+    assert(drmHashInsert(mgr->name_hash, bo->name, bo) == 0);
+
     return &bo->bo;
 }
 
@@ -408,6 +449,9 @@ struct drm_armada_bo *drm_armada_bo_dumb_create(struct drm_armada_bufmgr *mgr,
         bo->alloc_size = arg.size;
         bo->ref = 1;
         bo->mgr = mgr;
+
+        /* Add it to the handle hash table */
+        assert(drmHashInsert(mgr->handle_hash, bo->bo.handle, bo) == 0);
     }
     return &bo->bo;
 }
@@ -447,6 +491,8 @@ int drm_armada_bo_flink(struct drm_armada_bo *dbo, uint32_t *name)
         if (ret)
             return ret;
         bo->name = flink.name;
+
+        assert(drmHashInsert(bo->mgr->name_hash, bo->name, bo) == 0);
     }
     *name = bo->name;
     return 0;
@@ -534,6 +580,18 @@ int drm_armada_init(int fd, struct drm_armada_bufmgr **mgrp)
     if (!mgr)
         return -1;
 
+    mgr->handle_hash = drmHashCreate();
+    if (!mgr->handle_hash) {
+        free(mgr);
+        return -1;
+    }
+    mgr->name_hash = drmHashCreate();
+    if (!mgr->name_hash) {
+        drmHashDestroy(mgr->handle_hash);
+        free(mgr);
+        return -1;
+    }
+
     armada_bo_cache_init(&mgr->cache);
     mgr->fd = fd;
     *mgrp = mgr;
@@ -544,5 +602,7 @@ int drm_armada_init(int fd, struct drm_armada_bufmgr **mgrp)
 void drm_armada_fini(struct drm_armada_bufmgr *mgr)
 {
     armada_bo_cache_fini(&mgr->cache);
+    drmHashDestroy(mgr->handle_hash);
+    drmHashDestroy(mgr->name_hash);
     free(mgr);
 }
