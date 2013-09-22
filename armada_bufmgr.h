@@ -23,8 +23,6 @@ void drm_armada_fini(struct drm_armada_bufmgr *);
 
 struct drm_armada_bo *drm_armada_bo_create(struct drm_armada_bufmgr *,
     unsigned w, unsigned h, unsigned bpp);
-struct drm_armada_bo *drm_armada_bo_create_phys(struct drm_armada_bufmgr *,
-    uint32_t phys, size_t size);
 struct drm_armada_bo *drm_armada_bo_dumb_create(struct drm_armada_bufmgr *,
     unsigned w, unsigned h, unsigned bpp);
 

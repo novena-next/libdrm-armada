@@ -271,40 +271,6 @@ static void armada_bo_cache_put(struct armada_bo *bo)
     armada_bo_free(bo);
 }
 
-struct drm_armada_bo *drm_armada_bo_create_phys(struct drm_armada_bufmgr *mgr,
-    uint32_t phys, size_t size)
-{
-    struct armada_bo *bo;
-    int fd = mgr->fd;
-
-    bo = calloc(1, sizeof *bo);
-    if (bo) {
-        struct drm_armada_gem_create_phys arg;
-        int ret;
-
-        memset(&arg, 0, sizeof(arg));
-        arg.phys = phys;
-        arg.size = size;
-
-        ret = drmIoctl(fd, DRM_IOCTL_ARMADA_GEM_CREATE_PHYS, &arg);
-        if (ret) {
-            free(bo);
-            return NULL;
-        }
-        bo->bo.ref = 1;
-        bo->bo.handle = arg.handle;
-        bo->bo.size = size;
-        bo->bo.type = DRM_ARMADA_BO_LINEAR;
-        bo->alloc_size = size;
-        bo->ref = 1;
-        bo->mgr = mgr;
-
-        /* Add it to the handle hash table */
-        assert(drmHashInsert(mgr->handle_hash, bo->bo.handle, bo) == 0);
-    }
-    return &bo->bo;
-}
-
 struct drm_armada_bo *drm_armada_bo_create(struct drm_armada_bufmgr *mgr,
     unsigned w, unsigned h, unsigned bpp)
 {
