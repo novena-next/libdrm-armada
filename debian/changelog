@@ -1,3 +1,12 @@
+libdrm-armada (2.0.2-1) unstable; urgency=low
+
+  * Updates for kernel ABI changes.
+  * Add DRM prime support.
+  * Remove drm_armada_bo_phys() and drm_armada_bo_create_phys().
+  * Add hashtables to allow the buffer manager to cache buffer objects.
+
+ -- Russell King <rmk_cubox@arm.linux.org.uk>  Tue, 2 Nov 2013 11:19:57 +0100
+
 libdrm-armada (2.0.1-1) unstable; urgency=low
 
   * Rename to Armada as this covers more devices than just the Armada 510
