@@ -1,3 +1,9 @@
+libdrm-armada (2.0.3-1) unstable; urgency=low
+
+  * Add drm_armada_bo_create_size()
+
+ -- Russell King <rmk_cubox@arm.linux.org.uk>  Sat, 20 Sep 2014 23:07:21 +0100
+
 libdrm-armada (2.0.2-1) unstable; urgency=low
 
   * Updates for kernel ABI changes.

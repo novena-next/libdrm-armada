@@ -333,6 +333,63 @@ struct drm_armada_bo *drm_armada_bo_create(struct drm_armada_bufmgr *mgr,
     return &bo->bo;
 }
 
+struct drm_armada_bo *drm_armada_bo_create_size(struct drm_armada_bufmgr *mgr,
+    size_t alloc_size)
+{
+    struct drm_armada_gem_create arg;
+    struct armada_bucket *bucket;
+    struct armada_bo *bo;
+    int fd = mgr->fd;
+    int ret;
+
+    /* Try to find a bucket for this allocation */
+    bucket = armada_find_bucket(&mgr->cache, alloc_size);
+    if (bucket) {
+        /* Can we allocate from our cache? */
+        bo = armada_bo_bucket_get(bucket, alloc_size);
+        if (bo) {
+            bo->bo.size = alloc_size;
+            bo->bo.pitch = 1;
+            bo->ref = 1;
+            return &bo->bo;
+        }
+
+        /* Otherwise, allocate a bo of the bucket size */
+        alloc_size = bucket->size;
+    } else {
+        /* No bucket, so round the size up according to our old rules */
+        alloc_size = armada_bo_round_size(alloc_size);
+    }
+
+    /* No, create a new bo */
+    bo = calloc(1, sizeof *bo);
+    if (!bo)
+        return NULL;
+
+    memset(&arg, 0, sizeof(arg));
+    arg.size = alloc_size;
+
+    ret = drmIoctl(fd, DRM_IOCTL_ARMADA_GEM_CREATE, &arg);
+    if (ret) {
+        free(bo);
+        return NULL;
+    }
+
+    bo->bo.ref = 1;
+    bo->bo.handle = arg.handle;
+    bo->bo.size = alloc_size;
+    bo->bo.pitch = 1;
+    bo->bo.type = DRM_ARMADA_BO_SHMEM;
+    bo->alloc_size = alloc_size;
+    bo->ref = 1;
+    bo->mgr = mgr;
+
+    /* Add it to the handle hash table */
+    assert(drmHashInsert(mgr->handle_hash, bo->bo.handle, bo) == 0);
+
+    return &bo->bo;
+}
+
 struct drm_armada_bo *drm_armada_bo_create_from_name(struct drm_armada_bufmgr *mgr,
     uint32_t name)
 {
