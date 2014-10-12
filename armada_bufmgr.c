@@ -74,6 +74,7 @@ struct armada_bo {
 	size_t alloc_size;           /* Allocated size */
 	uint32_t ref;                /* Reference count */
 	uint32_t name;               /* Global name */
+	uint8_t reusable;
 };
 
 #define to_armada_bo(_bo) container_of(_bo, struct armada_bo, bo)
@@ -326,6 +327,7 @@ struct drm_armada_bo *drm_armada_bo_create(struct drm_armada_bufmgr *mgr,
     bo->alloc_size = alloc_size;
     bo->ref = 1;
     bo->mgr = mgr;
+    bo->reusable = 1;
 
     /* Add it to the handle hash table */
     assert(drmHashInsert(mgr->handle_hash, bo->bo.handle, bo) == 0);
@@ -383,6 +385,7 @@ struct drm_armada_bo *drm_armada_bo_create_size(struct drm_armada_bufmgr *mgr,
     bo->alloc_size = alloc_size;
     bo->ref = 1;
     bo->mgr = mgr;
+    bo->reusable = 1;
 
     /* Add it to the handle hash table */
     assert(drmHashInsert(mgr->handle_hash, bo->bo.handle, bo) == 0);
@@ -492,7 +495,7 @@ void drm_armada_bo_put(struct drm_armada_bo *dbo)
     if (bo->ref-- == 1) {
         int ret;
 
-        if (bo->bo.type == DRM_ARMADA_BO_SHMEM)
+        if (bo->reusable)
             armada_bo_cache_put(bo);
         else
             armada_bo_free(bo);
@@ -514,6 +517,7 @@ int drm_armada_bo_flink(struct drm_armada_bo *dbo, uint32_t *name)
         if (ret)
             return ret;
         bo->name = flink.name;
+        bo->reusable = 0;
 
         assert(drmHashInsert(bo->mgr->name_hash, bo->name, bo) == 0);
     }
