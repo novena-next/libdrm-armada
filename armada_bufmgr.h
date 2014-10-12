@@ -1,6 +1,8 @@
 #ifndef DRM_ARMADA_GEM_H
 #define DRM_ARMADA_GEM_H
 
+#include <stdint.h>
+
 enum drm_armada_bo_type {
 	DRM_ARMADA_BO_DUMB,
 	DRM_ARMADA_BO_LINEAR,
@@ -18,6 +20,7 @@ struct drm_armada_bo {
 	enum drm_armada_bo_type type;
 };
 
+int drm_armada_cache_reap(struct drm_armada_bufmgr *mgr);
 int drm_armada_init(int fd, struct drm_armada_bufmgr **mgr);
 void drm_armada_fini(struct drm_armada_bufmgr *);
 

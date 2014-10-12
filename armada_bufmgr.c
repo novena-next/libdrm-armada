@@ -595,6 +595,19 @@ int drm_armada_bo_subdata(struct drm_armada_bo *dbo, unsigned long offset,
     return drmIoctl(fd, DRM_IOCTL_ARMADA_GEM_PWRITE, &arg);
 }
 
+int drm_armada_cache_reap(struct drm_armada_bufmgr *mgr)
+{
+    struct timespec time;
+
+    if (!DRMLISTEMPTY(&mgr->cache.head)) {
+        clock_gettime(CLOCK_MONOTONIC, &time);
+
+        armada_bo_cache_clean(&mgr->cache, time.tv_sec);
+    }
+
+    return !DRMLISTEMPTY(&mgr->cache.head);
+}
+
 int drm_armada_init(int fd, struct drm_armada_bufmgr **mgrp)
 {
     struct drm_armada_bufmgr *mgr;
