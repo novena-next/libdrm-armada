@@ -3,8 +3,9 @@ libdrm-armada (2.0.3-1) unstable; urgency=low
   * Add drm_armada_bo_create_size()
   * Add drm_armada_cache_reap()
   * Better tracking of re-usable BOs
+  * Add drm_armada_bo_from_fd()
 
- -- Russell King <rmk_cubox@arm.linux.org.uk>  Sat, 12 Oct 2014 19:50:35 +0100
+ -- Russell King <rmk_cubox@arm.linux.org.uk>  Wed, 10 Jun 2015 20:46:00 +0100
 
 libdrm-armada (2.0.2-1) unstable; urgency=low
 

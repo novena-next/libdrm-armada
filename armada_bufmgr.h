@@ -40,6 +40,8 @@ int drm_armada_bo_flink(struct drm_armada_bo *bo, uint32_t *name);
 
 /* Create a dmabuf fd for the BO */
 int drm_armada_bo_to_fd(struct drm_armada_bo *bo, int *fd);
+struct drm_armada_bo *drm_armada_bo_from_fd(struct drm_armada_bufmgr *mgr,
+    int prime_fd);
 
 int drm_armada_bo_map(struct drm_armada_bo *bo);
 void drm_armada_bo_get(struct drm_armada_bo *bo);

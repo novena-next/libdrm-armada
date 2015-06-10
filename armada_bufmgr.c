@@ -393,6 +393,38 @@ struct drm_armada_bo *drm_armada_bo_create_size(struct drm_armada_bufmgr *mgr,
     return &bo->bo;
 }
 
+static struct armada_bo *drm_armada_bo_lookup_or_create(
+    struct drm_armada_bufmgr *mgr, uint32_t handle, size_t size)
+{
+    struct armada_bo *bo;
+
+    /*
+     * Lookup this handle in our hash of handles.  If it
+     * already exists, increment the refcount and return it.
+     */
+    if (drmHashLookup(mgr->handle_hash, handle, (void **)&bo) == 0) {
+        drm_armada_bo_get(&bo->bo);
+        return bo;
+    }
+
+    bo = calloc(1, sizeof *bo);
+    if (!bo)
+        return NULL;
+
+    bo->bo.ref = 1;
+    bo->bo.handle = handle;
+    bo->bo.size = size;
+    bo->bo.type = DRM_ARMADA_BO_LINEAR; /* assumed */
+    bo->alloc_size = size;
+    bo->ref = 1;
+    bo->mgr = mgr;
+
+    /* Add it to the handle hash table */
+    assert(drmHashInsert(mgr->handle_hash, bo->bo.handle, bo) == 0);
+
+    return bo;
+}
+
 struct drm_armada_bo *drm_armada_bo_create_from_name(struct drm_armada_bufmgr *mgr,
     uint32_t name)
 {
@@ -415,33 +447,38 @@ struct drm_armada_bo *drm_armada_bo_create_from_name(struct drm_armada_bufmgr *m
     if (ret == -1)
         return NULL;
 
-    /*
-     * Lookup this handle in our hash of handles.  If it
-     * already exists, increment the refcount and return it.
-     */
-    if (drmHashLookup(mgr->handle_hash, arg.handle, (void **)&bo) == 0) {
-        drm_armada_bo_get(&bo->bo);
-        return &bo->bo;
-    }
-
-    bo = calloc(1, sizeof *bo);
+    bo = drm_armada_bo_lookup_or_create(mgr, arg.handle, arg.size);
     if (!bo) {
         armada_gem_handle_close(fd, arg.handle);
         return NULL;
     }
 
-    bo->bo.ref = 1;
-    bo->bo.handle = arg.handle;
-    bo->bo.size = arg.size;
-    bo->bo.type = DRM_ARMADA_BO_LINEAR; /* assumed */
-    bo->alloc_size = arg.size;
-    bo->ref = 1;
     bo->name = name;
-    bo->mgr = mgr;
-
-    /* Add it to the handle hash table */
-    assert(drmHashInsert(mgr->handle_hash, bo->bo.handle, bo) == 0);
     assert(drmHashInsert(mgr->name_hash, bo->name, bo) == 0);
+
+    return &bo->bo;
+}
+
+struct drm_armada_bo *drm_armada_bo_from_fd(struct drm_armada_bufmgr *mgr,
+    int prime_fd)
+{
+    int fd = mgr->fd;
+    struct armada_bo *bo;
+    uint32_t handle;
+    off_t size;
+
+    size = lseek(prime_fd, 0, SEEK_END);
+    if (size == (off_t)-1)
+        return NULL;
+
+    if (drmPrimeFDToHandle(fd, prime_fd, &handle))
+        return NULL;
+
+    bo = drm_armada_bo_lookup_or_create(mgr, handle, size);
+    if (!bo) {
+        armada_gem_handle_close(fd, handle);
+        return NULL;
+    }
 
     return &bo->bo;
 }
