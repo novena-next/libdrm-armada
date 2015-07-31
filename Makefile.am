@@ -4,7 +4,7 @@ AM_CFLAGS = $(WARN_CFLAGS) @LIBDRM_CFLAGS@
 
 libdrm_armada_la_LTLIBRARIES = libdrm_armada.la
 libdrm_armada_ladir = $(libdir)
-libdrm_armada_la_LDFLAGS = -version-info 1:0:1 -no-undefined
+libdrm_armada_la_LDFLAGS = -version-info 2:0:2 -no-undefined
 libdrm_armada_la_LIBADD = @LIBDRM_LIBS@ @CLOCK_LIB@
 
 libdrm_armada_la_SOURCES = \
