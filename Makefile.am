@@ -9,6 +9,7 @@ libdrm_armada_la_LIBADD = @LIBDRM_LIBS@ @CLOCK_LIB@
 
 libdrm_armada_la_SOURCES = \
 	armada_bufmgr.c \
+	armada_ioctl.h \
 	libdrm_lists.h
 
 libdrm_armadaincludedir = ${includedir}/libdrm
