@@ -1,0 +1,15 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: lidrm-armada
+Upstream-Contact: Russell King <rmk@armlinux.org.uk>
+Source: http://git.arm.linux.org.uk/cgit/libdrm-armada.git
+Copyright: 2012-2018 Russell King <rmk@armlinux.org.uk>
+  2002, 2003, 2005 Tungsten Graphics, Inc., Cedar Park, Texas.
+  2005 Jesse Barnes <jbarnes@virtuousgeek.org>
+  2002 David Dawes
+  1998-1999 Precision Insight, Inc., Cedar Park, Texas.
+  2000, 2006, 2007, 2008, 2009, 2010 Intel Corporation
+  2000 by Alan Hourihane, Sychdyn, North Wales, UK.
+  2001 VA Linux Systems Inc., Fremont, California.
+  2007 Red Hat, Inc.
+  1999, 2000, 2001, 2008 Keith Packard
+License: GPL-2+ and MIT
