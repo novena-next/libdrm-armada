@@ -1,3 +1,21 @@
+libdrm-armada (2.0.4-1) unstable; urgency=medium
+
+  [ Russell King ]
+  * Increment library version
+
+  [ Lucas Stach ]
+  * Add armada_ioctl.h to the distribution tarball
+
+  [ Russell King ]
+  * Add COPYING file
+
+  [ Jookia ]
+  * debian: Add copyright file now that COPYING is here
+  * debian: Add source/format
+  * debian: Set myself as the maintainer
+
+ -- Jookia <contact@jookia.org>  Sun, 29 Mar 2020 17:03:52 +1100
+
 libdrm-armada (2.0.3-1) unstable; urgency=low
 
   * Add drm_armada_bo_create_size()
